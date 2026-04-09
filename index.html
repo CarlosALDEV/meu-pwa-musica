@@ -214,6 +214,60 @@
             background-color: #357ae8;
         }
 
+        .video-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.95);
+            z-index: 30;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-modal.active {
+            display: flex;
+        }
+
+        .video-container {
+            width: 90%;
+            max-width: 800px;
+            position: relative;
+        }
+
+        .video-container video {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+
+        .close-video-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #4285F4;
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            z-index: 31;
+        }
+
+        .close-video-btn:hover {
+            background: #357ae8;
+            transform: scale(1.05);
+        }
+
         .player-bar {
             background-color: #181818;
             padding: 0 20px;
@@ -234,6 +288,7 @@
             align-items: center;
             width: 30%;
             min-width: 200px;
+            cursor: pointer;
         }
         
         .player-info .thumb {
@@ -246,6 +301,12 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .player-info:hover .thumb {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
         }
         
         .player-info .thumb img {
@@ -336,6 +397,25 @@
             display: flex;
             justify-content: flex-end;
             align-items: center;
+            gap: 15px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .volume-control input {
+            width: 80px;
+            height: 4px;
+            cursor: pointer;
+            accent-color: #4285F4;
+        }
+
+        .volume-control i {
+            color: #b3b3b3;
+            font-size: 14px;
         }
 
         #g_id_onload { display: none; }
@@ -344,6 +424,19 @@
         .main-content::-webkit-scrollbar-track { background: transparent; }
         .main-content::-webkit-scrollbar-thumb { background: #555; border-radius: 5px; }
         .main-content::-webkit-scrollbar-thumb:hover { background: #b3b3b3; }
+
+        .error-message {
+            background-color: #ff4444;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -372,6 +465,8 @@
     </div>
 
     <div class="main-content" id="mainContent" style="display: none;">
+        <div class="error-message" id="errorMessage"></div>
+        
         <div class="header-actions">
             <button id="btnVoltar" class="back-button" onclick="goBack()" style="display: none;" title="Voltar">
                 <i class="fa-solid fa-chevron-left"></i>
@@ -382,10 +477,19 @@
         <div id="fileGrid" class="grid"></div>
     </div>
 
+    <div class="video-modal" id="videoModal">
+        <button class="close-video-btn" onclick="closeVideoModal()">
+            <i class="fa-solid fa-times"></i>
+        </button>
+        <div class="video-container">
+            <video id="videoPlayer" controls autoplay></video>
+        </div>
+    </div>
+
     <div class="player-bar">
         <audio id="audio" style="display: none;"></audio>
         
-        <div class="player-info">
+        <div class="player-info" onclick="openVideoModal()">
             <div class="thumb" id="playerThumb">
                 <i class="fa-solid fa-music"></i>
             </div>
@@ -405,7 +509,11 @@
         </div>
         
         <div class="player-right">
-             <i class="fa-solid fa-volume-high" style="color:#b3b3b3; font-size:14px; margin-right:15px;"></i>
+            <div class="volume-control">
+                <i class="fa-solid fa-volume-low"></i>
+                <input type="range" id="volumeSlider" min="0" max="100" value="100" onchange="changeVolume()">
+                <i class="fa-solid fa-volume-high"></i>
+            </div>
         </div>
     </div>
 
@@ -422,22 +530,40 @@
         let playlist = [];
         let allFilesRaw = [];
         let isRepeat = false;
+        let isLoading = false;
+        let isApiReady = false; // ✅ NOVO: Flag para garantir API inicializada
         
         let tokenClient;
         let driveAccessToken = null;
         let folderHistory = [{id: 'root', name: 'Início'}];
         let currentFolderId = 'root';
+        let currentFileData = null;
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 5000);
+        }
 
         function gapiLoaded() {
             gapi.load('client', intializeGapiClient);
         }
 
         async function intializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: DISCOVERY_DOCS,
-            });
-            console.log("gapi.client initialized");
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: DISCOVERY_DOCS,
+                });
+                isApiReady = true; // ✅ Marca como pronto
+                console.log("✅ gapi.client initialized successfully");
+            } catch(err) {
+                console.error("❌ Erro ao inicializar gapi:", err);
+                showError("Erro ao inicializar API do Google");
+            }
         }
 
         function handleCredentialResponse(response) {
@@ -470,23 +596,43 @@
              tokenClient.requestAccessToken({prompt: 'consent'}); 
         }
 
+        // ✅ FUNÇÃO CORRIGIDA: Não reinicializa a API
         function listFiles(folderId, folderName) {
-            document.getElementById('authStatus').textContent = "Buscando arquivos...";
+            // Verifica se a API está pronta
+            if (!isApiReady) {
+                showError("API do Google ainda não está pronta. Aguarde...");
+                return;
+            }
+
+            // Se já está carregando, não faz nova requisição
+            if (isLoading) {
+                console.log("⏳ Já está buscando arquivos, aguarde...");
+                return;
+            }
+
+            isLoading = true;
+            document.getElementById('authStatus').textContent = "🔍 Buscando arquivos...";
             
             const query = `'${folderId}' in parents and (mimeType contains 'audio/' or mimeType='video/mp4' or mimeType='application/vnd.google-apps.folder') and trashed = false`;
 
+            // ✅ NÃO reinicializa: apenas faz a requisição
             gapi.client.drive.files.list({
                 q: query,
                 fields: 'files(id, name, mimeType, thumbnailLink)',
                 orderBy: 'folder, name', 
-                pageSize: 1000
+                pageSize: 1000,
+                spaces: 'drive'
             }).then(response => {
+                isLoading = false; // ✅ Libera para nova busca
                 allFilesRaw = response.result.files || [];
                 displayFiles(folderName);
                 document.getElementById('authStatus').textContent = "";
+                console.log("✅ Arquivos carregados:", allFilesRaw.length);
             }).catch(error => {
-                console.error('Erro ao listar:', error);
-                document.getElementById('authStatus').textContent = "Erro ao buscar arquivos no Drive.";
+                isLoading = false; // ✅ Libera mesmo em erro
+                console.error('❌ Erro ao listar:', error);
+                showError("Erro ao buscar arquivos: " + (error.result?.error?.message || "Erro desconhecido"));
+                document.getElementById('authStatus').textContent = "❌ Erro ao buscar arquivos";
             });
         }
 
@@ -574,13 +720,16 @@
         }
 
         function playSong(index) {
+            if(isLoading) return; // ✅ Não deixa clicar enquanto carrega
             if(index < 0 || index >= playlist.length) return;
             
+            isLoading = true;
             currentIndex = index;
             const file = playlist[currentIndex];
             const audio = document.getElementById('audio');
             
             updatePlayerUI(file);
+            currentFileData = file;
             
             audio.src = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
             
@@ -594,9 +743,11 @@
                 const url = URL.createObjectURL(blob);
                 audio.src = url;
                 audio.play();
+                isLoading = false;
             }).catch(err => {
-                console.log("Erro no fetch do audio: ", err);
+                console.log("❌ Erro no fetch do audio: ", err);
                 document.getElementById('playerTitle').textContent = "Erro ao carregar mídia";
+                isLoading = false;
             });
         }
 
@@ -644,11 +795,53 @@
              }
          }
 
+         function changeVolume() {
+             const audio = document.getElementById('audio');
+             const volumeSlider = document.getElementById('volumeSlider');
+             audio.volume = volumeSlider.value / 100;
+         }
+
+         function openVideoModal() {
+             if(!currentFileData || !currentFileData.thumbnailLink) return;
+             
+             const videoPlayer = document.getElementById('videoPlayer');
+             videoPlayer.src = `https://www.googleapis.com/drive/v3/files/${currentFileData.id}?alt=media`;
+             
+             const audio = document.getElementById('audio');
+             videoPlayer.currentTime = audio.currentTime;
+             
+             if(!audio.paused) {
+                 videoPlayer.play();
+             }
+             
+             document.getElementById('videoModal').classList.add('active');
+         }
+
+         function closeVideoModal() {
+             const videoPlayer = document.getElementById('videoPlayer');
+             videoPlayer.pause();
+             document.getElementById('videoModal').classList.remove('active');
+         }
+
          document.getElementById('audio').addEventListener('ended', () => {
              if (isRepeat) {
                  playSong(currentIndex);
              } else {
                  nextSong();
+             }
+         });
+
+         document.getElementById('audio').addEventListener('play', () => {
+             const videoPlayer = document.getElementById('videoPlayer');
+             if(videoPlayer.src) {
+                 videoPlayer.play();
+             }
+         });
+
+         document.getElementById('audio').addEventListener('pause', () => {
+             const videoPlayer = document.getElementById('videoPlayer');
+             if(videoPlayer.src) {
+                 videoPlayer.pause();
              }
          });
          
