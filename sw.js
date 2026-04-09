@@ -1,9 +1,10 @@
-const CACHE_NAME = 'music-pwa-v2';
+const CACHE_NAME = 'music-pwa-v3';
 
 const ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './logo.png'
 ];
 
 self.addEventListener('install', event => {
