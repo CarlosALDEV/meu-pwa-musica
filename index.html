@@ -22,6 +22,9 @@
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
         h1 { text-align: center; margin-bottom: 30px; color: #4285f4; }
+        .g_id_signin { display: flex; justify-content: center; margin-bottom: 20px; }
+        #authStatus { text-align: center; margin-bottom: 10px; color: #aaa; }
+        
         button { 
             width: 100%; 
             padding: 12px; 
@@ -34,6 +37,8 @@
             font-size: 16px;
         }
         button:hover { background: #357ae8; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        
         #fileList { 
             list-style: none; 
             max-height: 300px; 
@@ -67,8 +72,18 @@
 <body>
     <div class="container">
         <h1>🎵 Meu Player de Música</h1>
-        <button id="authBtn" onclick="handleAuthClick()">Aguarde, carregando...</button>
         
+        <!-- Novo botão de login do Google (GIS) -->
+        <div id="g_id_onload"
+             data-client_id="971917202294-uoohja221hvlpqm909m1322kterki4sm.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        
+        <p id="authStatus">Aguardando login...</p>
+        <button id="loadMusicBtn" onclick="requestDriveAccess()" style="display:none;">Carregar Músicas do Drive</button>
+
         <div id="fileListContainer" style="display:none;">
             <h2 style="margin-top: 20px; font-size: 18px;">Suas Músicas:</h2>
             <ul id="fileList"></ul>
@@ -86,7 +101,10 @@
         </div>
     </div>
 
+    <!-- Novas Bibliotecas do Google -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js"></script>
+    
     <script>
         const CLIENT_ID = '971917202294-uoohja221hvlpqm909m1322kterki4sm.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyARKQirDe2_IZazq8Ium3szo-l79PscszA';
@@ -96,53 +114,68 @@
         let currentIndex = 0;
         let playlist = [];
         let isRepeat = false;
-        let authInstance;
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let driveAccessToken = null;
 
-        function handleAuthClick() {
-            if (!authInstance) {
-                alert("O Google Login não carregou. Verifique se você não está em aba anônima ou se o navegador está bloqueando cookies.");
-                return;
-            }
-            if (authInstance.isSignedIn.get()) {
-                authInstance.signOut();
-            } else {
-                authInstance.signIn().catch(err => {
-                    console.error("Erro no signIn:", err);
-                });
-            }
+        // 1. Inicializa a API clássica (apenas para acessar o Drive, não para login)
+        function gapiLoaded() {
+            gapi.load('client', intializeGapiClient);
         }
 
-        function initClient() {
-            gapi.client.init({
+        async function intializeGapiClient() {
+            await gapi.client.init({
                 apiKey: API_KEY,
-                clientId: CLIENT_ID,
                 discoveryDocs: DISCOVERY_DOCS,
-                scope: SCOPES
-            }).then(() => {
-                authInstance = gapi.auth2.getAuthInstance();
-                authInstance.isSignedIn.listen(updateSigninStatus);
-                updateSigninStatus(authInstance.isSignedIn.get());
-            }).catch(error => {
-                console.error("Erro no initClient:", error);
-                alert("O Google bloqueou a conexão. Detalhe do erro: " + (error.details || error.error || "Erro desconhecido. Verifique a tela de consentimento no Google Cloud."));
-                document.getElementById('authBtn').textContent = 'Erro de Conexão';
             });
+            gapiInited = true;
+            checkReady();
         }
 
-        function updateSigninStatus(isSignedIn) {
-            const button = document.getElementById('authBtn');
-            if (isSignedIn) {
-                button.textContent = '✅ Desconectar';
-                document.getElementById('fileListContainer').style.display = 'block';
-                listAudioFiles();
-            } else {
-                button.textContent = 'Conectar com Google';
-                document.getElementById('fileListContainer').style.display = 'none';
-                document.getElementById('player').style.display = 'none';
+        // 2. Callback de quando o botão do Google é clicado (Login)
+        function handleCredentialResponse(response) {
+            console.log("Login com Google bem sucedido!");
+            document.getElementById('authStatus').textContent = "Usuário autenticado. Clique abaixo para carregar as músicas.";
+            document.querySelector('.g_id_signin').style.display = 'none';
+            
+            // Agora que logou, pedimos a permissão extra para o Drive
+            initTokenClient();
+        }
+
+        // 3. Pede permissão para acessar o Google Drive do usuário logado
+        function initTokenClient() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (tokenResponse) => {
+                    if (tokenResponse && tokenResponse.access_token) {
+                        driveAccessToken = tokenResponse.access_token;
+                        document.getElementById('loadMusicBtn').style.display = 'block';
+                        document.getElementById('authStatus').textContent = "Acesso ao Drive permitido!";
+                        listAudioFiles(); // Já tenta carregar as músicas direto
+                    }
+                },
+            });
+            gisInited = true;
+            checkReady();
+            
+            // Solicita o popup de permissão do Drive assim que logar
+            tokenClient.requestAccessToken({prompt: 'consent'});
+        }
+
+        function requestDriveAccess() {
+             tokenClient.requestAccessToken({prompt: ''});
+        }
+
+        function checkReady() {
+            if (gapiInited && gisInited) {
+                console.log("Pronto para uso");
             }
         }
 
         function listAudioFiles() {
+            document.getElementById('authStatus').textContent = "Carregando músicas...";
             gapi.client.drive.files.list({
                 q: "mimeType contains 'audio/' or mimeType='video/mp4'",
                 fields: 'files(id, name, mimeType)',
@@ -150,15 +183,18 @@
             }).then(response => {
                 playlist = response.result.files || [];
                 displayFiles(playlist);
+                document.getElementById('authStatus').textContent = playlist.length + " músicas carregadas.";
             }).catch(error => {
                 console.error('Erro ao listar arquivos:', error);
-                alert('Erro ao listar arquivos do Google Drive');
+                document.getElementById('authStatus').textContent = "Erro ao acessar o Drive.";
             });
         }
 
         function displayFiles(files) {
             const fileList = document.getElementById('fileList');
             fileList.innerHTML = '';
+            document.getElementById('fileListContainer').style.display = 'block';
+            
             if (files.length === 0) {
                 fileList.innerHTML = '<li class="file-item">Nenhuma música encontrada no Drive</li>';
                 return;
@@ -176,56 +212,71 @@
             currentIndex = index;
             const file = playlist[currentIndex];
             const audio = document.getElementById('audio');
-            audio.src = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
-            audio.play();
-            document.getElementById('currentSong').textContent = '♫ ' + file.name;
-            document.getElementById('player').style.display = 'block';
-            document.getElementById('playPauseBtn').textContent = '⏸ Pausa';
+            
+            // Adiciona o token de acesso na URL para baixar a mídia
+            audio.src = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+            
+            // É necessário passar o token no header (não apenas na URL) com a nova API
+            fetch(audio.src, {
+                headers: new Headers({
+                    'Authorization': 'Bearer ' + driveAccessToken
+                })
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                audio.src = url;
+                audio.play();
+                document.getElementById('currentSong').textContent = '♫ ' + file.name;
+                document.getElementById('player').style.display = 'block';
+                document.getElementById('playPauseBtn').textContent = '⏸ Pausa';
+            });
         }
 
         function togglePlay() {
-            const audio = document.getElementById('audio');
-            const btn = document.getElementById('playPauseBtn');
-            if (audio.paused) {
-                audio.play();
-                btn.textContent = '⏸ Pausa';
-            } else {
-                audio.pause();
-                btn.textContent = '▶ Play';
-            }
-        }
+             const audio = document.getElementById('audio');
+             const btn = document.getElementById('playPauseBtn');
+             if (audio.paused) {
+                 audio.play();
+                 btn.textContent = '⏸ Pausa';
+             } else {
+                 audio.pause();
+                 btn.textContent = '▶ Play';
+             }
+         }
 
-        function nextSong() {
-            if (playlist.length > 0) {
-                currentIndex = (currentIndex + 1) % playlist.length;
-                playSong(currentIndex);
-            }
-        }
+         function nextSong() {
+             if (playlist.length > 0) {
+                 currentIndex = (currentIndex + 1) % playlist.length;
+                 playSong(currentIndex);
+             }
+         }
 
-        function prevSong() {
-            if (playlist.length > 0) {
-                currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
-                playSong(currentIndex);
-            }
-        }
+         function prevSong() {
+             if (playlist.length > 0) {
+                 currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
+                 playSong(currentIndex);
+             }
+         }
 
-        function toggleRepeat() {
-            isRepeat = !isRepeat;
-            const btn = document.getElementById('repeatBtn');
-            btn.textContent = isRepeat ? '🔁 Repetir (On)' : '🔁 Repetir';
-        }
+         function toggleRepeat() {
+             isRepeat = !isRepeat;
+             const btn = document.getElementById('repeatBtn');
+             btn.textContent = isRepeat ? '🔁 Repetir (On)' : '🔁 Repetir';
+         }
 
-        document.getElementById('audio').addEventListener('ended', () => {
-            if (isRepeat) {
-                playSong(currentIndex);
-            } else {
-                nextSong();
-            }
-        });
+         document.getElementById('audio').addEventListener('ended', () => {
+             if (isRepeat) {
+                 playSong(currentIndex);
+             } else {
+                 nextSong();
+             }
+         });
 
-        window.addEventListener('load', () => {
-            gapi.load('client:auth2', initClient);
-        });
+        // Carrega o GAPI no boot da página
+        window.onload = function () {
+            gapiLoaded();
+        };
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').catch(() => {});
