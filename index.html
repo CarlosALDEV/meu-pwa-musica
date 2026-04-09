@@ -67,7 +67,7 @@
 <body>
     <div class="container">
         <h1>🎵 Meu Player de Música</h1>
-        <button id="authBtn" onclick="handleAuthClick()">Conectar com Google</button>
+        <button id="authBtn" onclick="handleAuthClick()">Aguarde, carregando...</button>
         
         <div id="fileListContainer" style="display:none;">
             <h2 style="margin-top: 20px; font-size: 18px;">Suas Músicas:</h2>
@@ -99,16 +99,16 @@
         let authInstance;
 
         function handleAuthClick() {
-            const button = document.getElementById('authBtn');
-            if (window.gapi && window.gapi.auth2) {
-                if (authInstance && authInstance.isSignedIn.get()) {
-                    authInstance.signOut();
-                    button.textContent = 'Conectar com Google';
-                    document.getElementById('fileListContainer').style.display = 'none';
-                    document.getElementById('player').style.display = 'none';
-                } else {
-                    authInstance.signIn();
-                }
+            if (!authInstance) {
+                alert("O Google Login não carregou. Verifique se você não está em aba anônima ou se o navegador está bloqueando cookies.");
+                return;
+            }
+            if (authInstance.isSignedIn.get()) {
+                authInstance.signOut();
+            } else {
+                authInstance.signIn().catch(err => {
+                    console.error("Erro no signIn:", err);
+                });
             }
         }
 
@@ -122,6 +122,10 @@
                 authInstance = gapi.auth2.getAuthInstance();
                 authInstance.isSignedIn.listen(updateSigninStatus);
                 updateSigninStatus(authInstance.isSignedIn.get());
+            }).catch(error => {
+                console.error("Erro no initClient:", error);
+                alert("O Google bloqueou a conexão. Detalhe do erro: " + (error.details || error.error || "Erro desconhecido. Verifique a tela de consentimento no Google Cloud."));
+                document.getElementById('authBtn').textContent = 'Erro de Conexão';
             });
         }
 
@@ -134,6 +138,7 @@
             } else {
                 button.textContent = 'Conectar com Google';
                 document.getElementById('fileListContainer').style.display = 'none';
+                document.getElementById('player').style.display = 'none';
             }
         }
 
