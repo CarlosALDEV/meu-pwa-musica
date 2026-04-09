@@ -2,7 +2,7 @@
   "name": "Meu Player de Música Google Drive",
   "short_name": "My Music",
   "description": "Aplicativo para tocar músicas do Google Drive",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#4285f4",
