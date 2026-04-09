@@ -3,147 +3,472 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meu Player de Música Google Drive</title>
+    <title>SS Music - Dr. Sylvio Sacramento</title>
     <link rel="manifest" href="manifest.json">
+    
+    <!-- Ícones FontAwesome para deixar elegante -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
+        /* Estilo Base - Spotify Dark Mode */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: #1a1a1a; 
-            color: #fff; 
-            padding: 20px;
-        }
-        .container { 
-            max-width: 600px; 
-            margin: 0 auto; 
-            background: #2a2a2a; 
-            padding: 30px; 
-            border-radius: 10px; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-        h1 { text-align: center; margin-bottom: 30px; color: #4285f4; }
-        .g_id_signin { display: flex; justify-content: center; margin-bottom: 20px; }
-        #authStatus { text-align: center; margin-bottom: 10px; color: #aaa; }
         
-        button { 
-            width: 100%; 
-            padding: 12px; 
-            margin: 10px 0; 
-            background: #4285f4; 
-            color: white; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer; 
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden; /* O scroll será apenas na área central */
+        }
+        
+        /* Topbar Customizada */
+        .topbar {
+            background-color: #000000;
+            padding: 15px 30px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #282828;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        
+        .topbar img {
+            height: 40px;
+            border-radius: 50%; /* Se a logo for quadrada, deixa redondinha */
+            margin-right: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .brand-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .brand-info h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+        }
+        
+        .brand-info p {
+            margin: 2px 0 0 0;
+            font-size: 12px;
+            font-weight: 500;
+            color: #4285F4; /* Azul Google/Premium usado como destaque */
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* Status de Autenticação e Botões do Topo */
+        .auth-container {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        #authStatus {
+            font-size: 13px;
+            color: #b3b3b3;
+        }
+        
+        /* Área Central (Onde ficam as pastas e músicas) */
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background: linear-gradient(180deg, #1e1e1e 0%, #121212 100%);
+            padding-bottom: 120px; /* Espaço para o player fixo não cobrir os cards */
+        }
+        
+        /* Botão Voltar Premium */
+        .header-actions {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            height: 40px;
+        }
+        
+        .back-button {
+            background-color: rgba(0,0,0,0.6);
+            color: #ffffff;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 16px;
+            transition: all 0.2s ease;
         }
-        button:hover { background: #357ae8; }
-        button:disabled { background: #666; cursor: not-allowed; }
         
-        #fileList { 
-            list-style: none; 
-            max-height: 300px; 
-            overflow-y: auto; 
-            margin: 20px 0;
+        .back-button:hover {
+            background-color: #282828;
+            transform: scale(1.05);
         }
-        .file-item { 
-            padding: 12px; 
-            margin: 8px 0; 
-            background: #3a3a3a; 
-            border-radius: 5px; 
-            cursor: pointer; 
-            transition: all 0.3s;
+        
+        .folder-title {
+            margin-left: 15px;
+            font-size: 24px;
+            font-weight: 700;
         }
-        .file-item:hover { 
-            background: #4285f4; 
-            transform: translateX(5px);
+        
+        /* Grid de Músicas e Pastas */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 24px;
         }
-        .player { 
-            margin-top: 20px; 
-            padding: 20px; 
-            background: #3a3a3a; 
-            border-radius: 5px;
+        
+        /* Cards */
+        .card {
+            background-color: #181818;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            position: relative;
         }
-        audio { width: 100%; margin: 15px 0; }
-        .controls { text-align: center; margin: 20px 0; }
-        .controls button { width: auto; padding: 10px 20px; margin: 5px; }
-        #currentSong { color: #4285f4; margin: 10px 0; }
+        
+        .card:hover {
+            background-color: #282828;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            /* transform: translateY(-4px); Opcional se quiser efeito de levitar */
+        }
+        
+        .card-image-container {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            margin-bottom: 16px;
+            border-radius: 6px;
+            overflow: hidden;
+            background-color: #282828;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        
+        .card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .card .icon-placeholder {
+            font-size: 60px;
+            color: #b3b3b3;
+        }
+        
+        .card.folder .icon-placeholder {
+            color: #4285F4; /* Azul para as pastas */
+        }
+        
+        .card h3 {
+            margin: 0 0 5px 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; /* Corta textos longos com ... */
+        }
+        
+        .card p {
+            margin: 0;
+            font-size: 13px;
+            color: #b3b3b3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Hover Play Button (Surge ao passar o mouse na música) */
+        .play-hover-btn {
+            position: absolute;
+            bottom: 60px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            background-color: #4285F4;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 18px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+            border: none;
+            padding-left: 3px; /* Centraliza o ícone de play opticamente */
+        }
+
+        .card:not(.folder):hover .play-hover-btn {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .play-hover-btn:hover {
+            transform: scale(1.05) !important;
+            background-color: #357ae8;
+        }
+
+        /* Barra do Player Fixa no Rodapé */
+        .player-bar {
+            background-color: #181818;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 90px;
+            border-top: 1px solid #282828;
+            z-index: 20;
+        }
+        
+        /* Canto esquerdo do player (Info da Música) */
+        .player-info {
+            display: flex;
+            align-items: center;
+            width: 30%;
+            min-width: 200px;
+        }
+        
+        .player-info .thumb {
+            width: 56px;
+            height: 56px;
+            border-radius: 4px;
+            background-color: #282828;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .player-info .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .player-info .thumb i {
+            color: #b3b3b3;
+            font-size: 24px;
+        }
+        
+        .player-info-text {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .player-info-text h4 {
+            margin: 0 0 3px 0;
+            font-size: 14px;
+            font-weight: 500;
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .player-info-text p {
+            margin: 0;
+            font-size: 11px;
+            color: #b3b3b3;
+        }
+        
+        /* Centro do player (Controles Centrais) */
+        .player-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 40%;
+            max-width: 722px;
+        }
+        
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .controls button {
+            background: none;
+            border: none;
+            color: #b3b3b3;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        
+        .controls button:hover {
+            color: #ffffff;
+        }
+        
+        .controls button.active {
+            color: #4285F4;
+        }
+        
+        /* Botão Play/Pause Círculo Branco */
+        .controls .btn-play-pause {
+            background-color: #ffffff;
+            color: #000000;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 14px;
+            padding-left: 2px; /* Correção ótica do logo play */
+        }
+        
+        .controls .btn-play-pause:hover {
+            transform: scale(1.05);
+            background-color: #ffffff;
+            color: #000000;
+        }
+
+        /* Direita do player (Volume, extras) */
+        .player-right {
+            width: 30%;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+        /* Oculta o painel do Google para ficar customizado */
+        #g_id_onload { display: none; }
+        
+        /* CustomScroll principal */
+        .main-content::-webkit-scrollbar { width: 10px; }
+        .main-content::-webkit-scrollbar-track { background: transparent; }
+        .main-content::-webkit-scrollbar-thumb { background: #555; border-radius: 5px; }
+        .main-content::-webkit-scrollbar-thumb:hover { background: #b3b3b3; }
+
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎵 Meu Player de Música</h1>
+
+    <!-- Topbar -->
+    <div class="topbar">
+        <!-- Substitua pelo caminho real da sua logomarca gerada -->
+        <img src="logo.png" id="logoApp" alt="SS Music Logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><circle cx=\'50\' cy=\'50\' r=\'50\' fill=\'%234285F4\'/><text x=\'50\' y=\'55\' font-family=\'Arial\' font-size=\'40\' fill=\'white\' text-anchor=\'middle\' font-weight=\'bold\' dominant-baseline=\'middle\'>SS</text></svg>'">
         
-        <!-- Novo botão de login do Google (GIS) -->
+        <div class="brand-info">
+            <h1>SS Music</h1>
+            <p>Dr. Sylvio Sacramento</p>
+        </div>
+        
+        <div class="auth-container">
+            <span id="authStatus">Aguardando login...</span>
+            <div id="gis-button-container">
+                <div class="g_id_signin" data-type="standard" data-theme="filled_black" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            </div>
+            <button id="authFallbackBtn" onclick="requestDriveAccess()" style="display:none; padding:8px 15px; border-radius:20px; background:#4285F4; border:none; color:white; font-weight:bold; cursor:pointer;">Conectar Drive</button>
+        </div>
+        
+        <!-- Elemento oculto do Google Identity -->
         <div id="g_id_onload"
              data-client_id="971917202294-uoohja221hvlpqm909m1322kterki4sm.apps.googleusercontent.com"
              data-callback="handleCredentialResponse"
              data-auto_prompt="false">
         </div>
-        <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
-        
-        <p id="authStatus">Aguardando login...</p>
-        <button id="loadMusicBtn" onclick="requestDriveAccess()" style="display:none;">Carregar Músicas do Drive</button>
+    </div>
 
-        <div id="fileListContainer" style="display:none;">
-            <h2 style="margin-top: 20px; font-size: 18px;">Suas Músicas:</h2>
-            <ul id="fileList"></ul>
+    <!-- Área Principal de Conteúdo -->
+    <div class="main-content" id="mainContent" style="display: none;">
+        
+        <div class="header-actions">
+            <button id="btnVoltar" class="back-button" onclick="goBack()" style="display: none;" title="Voltar">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <h2 id="currentFolderName" class="folder-title">Início</h2>
         </div>
         
-        <div class="player" id="player" style="display: none;">
-            <h2 id="currentSong"></h2>
-            <audio id="audio" controls></audio>
-            <div class="controls">
-                <button id="prevBtn" onclick="prevSong()">⏮ Anterior</button>
-                <button id="playPauseBtn" onclick="togglePlay()">▶ Play</button>
-                <button id="nextBtn" onclick="nextSong()">Próxima ⏭</button>
-                <button id="repeatBtn" onclick="toggleRepeat()">🔁 Repetir</button>
-            </div>
+        <!-- Grid Onde as Músicas e Pastas Entram -->
+        <div id="fileGrid" class="grid">
+            <!-- Os cards serão criados aqui via JavaScript -->
         </div>
     </div>
 
-    <!-- Novas Bibliotecas do Google -->
+    <!-- Player Fixo no Rodapé -->
+    <div class="player-bar">
+        <audio id="audio" style="display: none;"></audio> <!-- Áudio oculto funcional -->
+        
+        <!-- Info da Música (Esquerda) -->
+        <div class="player-info">
+            <div class="thumb" id="playerThumb">
+                <i class="fa-solid fa-music"></i>
+            </div>
+            <div class="player-info-text">
+                <h4 id="playerTitle">Nenhuma música</h4>
+                <p id="playerArtist">Selecione para tocar</p>
+            </div>
+        </div>
+        
+        <!-- Controles Centrais (Centro) -->
+        <div class="player-center">
+            <div class="controls">
+                <button id="prevBtn" onclick="prevSong()" title="Anterior"><i class="fa-solid fa-backward-step"></i></button>
+                <button id="playPauseBtn" class="btn-play-pause" onclick="togglePlay()" title="Play/Pause"><i class="fa-solid fa-play" id="playIcon"></i></button>
+                <button id="nextBtn" onclick="nextSong()" title="Próxima"><i class="fa-solid fa-forward-step"></i></button>
+                <button id="repeatBtn" onclick="toggleRepeat()" title="Repetir"><i class="fa-solid fa-repeat"></i></button>
+            </div>
+        </div>
+        
+        <!-- Ferramentas Extras (Direita) - Ex: Ícone de volume estético -->
+        <div class="player-right">
+             <i class="fa-solid fa-volume-high" style="color:#b3b3b3; font-size:14px; margin-right:15px;"></i>
+        </div>
+    </div>
+
+    <!-- Scripts do Google e Lógica -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js"></script>
     
     <script>
+        // Configurações API
         const CLIENT_ID = '971917202294-uoohja221hvlpqm909m1322kterki4sm.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyARKQirDe2_IZazq8Ium3szo-l79PscszA';
         const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
 
-        let currentIndex = 0;
-        let playlist = [];
+        // Lógica de Player e Navegação
+        let currentIndex = -1;
+        let playlist = []; // Array apenas com os áudios/vídeos da pasta atual
+        let allFilesRaw = []; // Array bruto misto (pastas + midia)
         let isRepeat = false;
+        
         let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
         let driveAccessToken = null;
+        let folderHistory = [{id: 'root', name: 'Início'}];
+        let currentFolderId = 'root';
 
-        // 1. Inicializa a API clássica (apenas para acessar o Drive, não para login)
-        function gapiLoaded() {
-            gapi.load('client', intializeGapiClient);
-        }
-
-        async function intializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: DISCOVERY_DOCS,
-            });
-            gapiInited = true;
-            checkReady();
-        }
-
-        // 2. Callback de quando o botão do Google é clicado (Login)
+        // --- AUTENTICAÇÃO --- //
         function handleCredentialResponse(response) {
-            console.log("Login com Google bem sucedido!");
-            document.getElementById('authStatus').textContent = "Usuário autenticado. Clique abaixo para carregar as músicas.";
-            document.querySelector('.g_id_signin').style.display = 'none';
-            
-            // Agora que logou, pedimos a permissão extra para o Drive
+            document.getElementById('authStatus').textContent = "Pronto para autorizar.";
+            document.getElementById('gis-button-container').style.display = 'none';
+            document.getElementById('authFallbackBtn').style.display = 'block';
             initTokenClient();
         }
 
-        // 3. Pede permissão para acessar o Google Drive do usuário logado
         function initTokenClient() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
@@ -151,72 +476,159 @@
                 callback: (tokenResponse) => {
                     if (tokenResponse && tokenResponse.access_token) {
                         driveAccessToken = tokenResponse.access_token;
-                        document.getElementById('loadMusicBtn').style.display = 'block';
-                        document.getElementById('authStatus').textContent = "Acesso ao Drive permitido!";
-                        listAudioFiles(); // Já tenta carregar as músicas direto
+                        document.getElementById('authFallbackBtn').style.display = 'none';
+                        document.getElementById('authStatus').textContent = "Conectado. Bem-vindo!";
+                        document.getElementById('authStatus').style.color = "#4285F4";
+                        
+                        document.getElementById('mainContent').style.display = 'block';
+                        listFiles('root', 'Início'); 
                     }
                 },
             });
-            gisInited = true;
-            checkReady();
-            
-            // Solicita o popup de permissão do Drive assim que logar
-            tokenClient.requestAccessToken({prompt: 'consent'});
+            // Tenta abrir o popup logo após o login se o navegador permitir
+            requestDriveAccess();
         }
 
         function requestDriveAccess() {
-             tokenClient.requestAccessToken({prompt: ''});
+             tokenClient.requestAccessToken({prompt: 'none'}); 
+             // Se falhar bloqueado por popup, o usuário pode clicar no botão verde de fallback
+             tokenClient.requestAccessToken({prompt: 'consent'}); 
         }
 
-        function checkReady() {
-            if (gapiInited && gisInited) {
-                console.log("Pronto para uso");
-            }
-        }
+        // --- BUSCA DO GOOGLE DRIVE --- //
+        function listFiles(folderId, folderName) {
+            document.getElementById('authStatus').textContent = "Buscando arquivos...";
+            
+            // Query: busca pastas OU áudios OU vídeos que estão dentr da pasta selecionada
+            const query = `'${folderId}' in parents and (mimeType contains 'audio/' or mimeType contains 'video/' or mimeType='application/vnd.google-apps.folder') and trashed = false`;
 
-        function listAudioFiles() {
-            document.getElementById('authStatus').textContent = "Carregando músicas...";
-            gapi.client.drive.files.list({
-                q: "mimeType contains 'audio/' or mimeType='video/mp4'",
-                fields: 'files(id, name, mimeType)',
-                pageSize: 100
+            gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: DISCOVERY_DOCS,
+            }).then(() => {
+                return gapi.client.drive.files.list({
+                    q: query,
+                    fields: 'files(id, name, mimeType, thumbnailLink)',
+                    orderBy: 'folder, name', 
+                    pageSize: 1000
+                });
             }).then(response => {
-                playlist = response.result.files || [];
-                displayFiles(playlist);
-                document.getElementById('authStatus').textContent = playlist.length + " músicas carregadas.";
+                allFilesRaw = response.result.files || [];
+                displayFiles(folderName);
+                document.getElementById('authStatus').textContent = "";
             }).catch(error => {
-                console.error('Erro ao listar arquivos:', error);
-                document.getElementById('authStatus').textContent = "Erro ao acessar o Drive.";
+                console.error('Erro ao listar:', error);
+                document.getElementById('authStatus').textContent = "Conectado. (Erro interno visualizando pasta)";
             });
         }
 
-        function displayFiles(files) {
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '';
-            document.getElementById('fileListContainer').style.display = 'block';
+        // --- RENDERIZAÇÃO DA TELA (CARDS) --- //
+        function displayFiles(folderName) {
+            const grid = document.getElementById('fileGrid');
+            grid.innerHTML = '';
             
-            if (files.length === 0) {
-                fileList.innerHTML = '<li class="file-item">Nenhuma música encontrada no Drive</li>';
+            // Atualiza os botões e títulos
+            document.getElementById('currentFolderName').textContent = folderName;
+            
+            if (folderHistory.length > 1) {
+                document.getElementById('btnVoltar').style.display = 'flex';
+            } else {
+                document.getElementById('btnVoltar').style.display = 'none';
+            }
+
+            // Separa apenas os tocáveis para o player pular automaticamente
+            playlist = allFilesRaw.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+
+            if (allFilesRaw.length === 0) {
+                grid.innerHTML = '<p style="color:#b3b3b3;">Esta pasta está vazia.</p>';
                 return;
             }
-            files.forEach((file, index) => {
-                const li = document.createElement('li');
-                li.className = 'file-item';
-                li.textContent = file.name;
-                li.onclick = () => playSong(index);
-                fileList.appendChild(li);
+
+            allFilesRaw.forEach(file => {
+                const card = document.createElement('div');
+                card.className = 'card' + (file.mimeType === 'application/vnd.google-apps.folder' ? ' folder' : '');
+                
+                let imageHtml = '';
+                
+                // Trata a imagem do card
+                if (file.mimeType === 'application/vnd.google-apps.folder') {
+                    // Ícone de pasta
+                    imageHtml = `<div class="card-image-container"><i class="fa-solid fa-folder icon-placeholder"></i></div>`;
+                    card.onclick = () => openFolder(file.id, file.name);
+                } else {
+                    // É mídia (áudio ou vídeo). Tem thumbnail gerada pelo Google?
+                    if (file.thumbnailLink) {
+                        imageHtml = `<div class="card-image-container"><img src="${file.thumbnailLink}" alt="Capa"></div>`;
+                    } else {
+                        // Não tem foto = Ícone de Nota Musical
+                        imageHtml = `<div class="card-image-container"><i class="fa-solid fa-music icon-placeholder"></i></div>`;
+                    }
+                    
+                    // Ícone de play secreto flutuante (Hover)
+                    imageHtml += `<button class="play-hover-btn"><i class="fa-solid fa-play"></i></button>`;
+                    
+                    // Achar onde essa música está no nosso array real de playlist para tocar certo
+                    const pIndex = playlist.findIndex(p => p.id === file.id);
+                    card.onclick = () => playSong(pIndex);
+                }
+
+                card.innerHTML = `
+                    ${imageHtml}
+                    <h3>${file.name.replace(/\.[^/.]+$/, "")}</h3> <!-- Nome sem a extensao .mp3 -->
+                    <p>${file.mimeType === 'application/vnd.google-apps.folder' ? 'Pasta' : 'SS Music'}</p>
+                `;
+                
+                grid.appendChild(card);
             });
+        }
+
+        // --- NAVEGAÇÃO DE PASTAS --- //
+        function openFolder(folderId, folderName) {
+            folderHistory.push({id: folderId, name: folderName});
+            currentFolderId = folderId;
+            listFiles(folderId, folderName);
+        }
+
+        function goBack() {
+            if (folderHistory.length > 1) {
+                folderHistory.pop(); // Remove a atual da memória de histórico
+                const prevFolder = folderHistory[folderHistory.length - 1]; // Pega a de trás
+                currentFolderId = prevFolder.id;
+                listFiles(prevFolder.id, prevFolder.name);
+            }
+        }
+
+        // --- LÓGICA DO PLAYER FIXO --- //
+        function updatePlayerUI(file) {
+            document.getElementById('playerTitle').textContent = file.name.replace(/\.[^/.]+$/, "");
+            document.getElementById('playerArtist').textContent = 'Dr. Sylvio Sacramento';
+            
+            const thumbDiv = document.getElementById('playerThumb');
+            if (file.thumbnailLink) {
+                thumbDiv.innerHTML = `<img src="${file.thumbnailLink}">`;
+            } else {
+                thumbDiv.innerHTML = `<i class="fa-solid fa-music"></i>`;
+            }
+            
+            const playIcon = document.getElementById('playIcon');
+            playIcon.classList.remove('fa-play');
+            playIcon.classList.add('fa-pause');
+            document.getElementById('playPauseBtn').style.paddingLeft = '0px'; // Ajuste optico pause
         }
 
         function playSong(index) {
+            if(index < 0 || index >= playlist.length) return;
+            
             currentIndex = index;
             const file = playlist[currentIndex];
             const audio = document.getElementById('audio');
             
-            // Adiciona o token de acesso na URL para baixar a mídia
+            // UI visual do toque
+            updatePlayerUI(file);
+            
+            // Puxa e toca
             audio.src = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
             
-            // É necessário passar o token no header (não apenas na URL) com a nova API
             fetch(audio.src, {
                 headers: new Headers({
                     'Authorization': 'Bearer ' + driveAccessToken
@@ -227,21 +639,29 @@
                 const url = URL.createObjectURL(blob);
                 audio.src = url;
                 audio.play();
-                document.getElementById('currentSong').textContent = '♫ ' + file.name;
-                document.getElementById('player').style.display = 'block';
-                document.getElementById('playPauseBtn').textContent = '⏸ Pausa';
+            }).catch(err => {
+                console.log("Erro no fetch do audio: ", err);
+                document.getElementById('playerTitle').textContent = "Erro ao carregar mídia";
             });
         }
 
         function togglePlay() {
              const audio = document.getElementById('audio');
+             const playIcon = document.getElementById('playIcon');
              const btn = document.getElementById('playPauseBtn');
+             
+             if(!audio.src) return; // Se nao tem musica carregada não faz nada
+
              if (audio.paused) {
                  audio.play();
-                 btn.textContent = '⏸ Pausa';
+                 playIcon.classList.remove('fa-play');
+                 playIcon.classList.add('fa-pause');
+                 btn.style.paddingLeft = '0px';
              } else {
                  audio.pause();
-                 btn.textContent = '▶ Play';
+                 playIcon.classList.remove('fa-pause');
+                 playIcon.classList.add('fa-play');
+                 btn.style.paddingLeft = '2px';
              }
          }
 
@@ -262,25 +682,29 @@
          function toggleRepeat() {
              isRepeat = !isRepeat;
              const btn = document.getElementById('repeatBtn');
-             btn.textContent = isRepeat ? '🔁 Repetir (On)' : '🔁 Repetir';
+             if(isRepeat) {
+                 btn.classList.add('active');
+             } else {
+                 btn.classList.remove('active');
+             }
          }
 
+         // Avanço automático
          document.getElementById('audio').addEventListener('ended', () => {
              if (isRepeat) {
-                 playSong(currentIndex);
+                 playSong(currentIndex); // Repete a msma
              } else {
-                 nextSong();
+                 nextSong(); // Proxima
              }
          });
-
-        // Carrega o GAPI no boot da página
-        window.onload = function () {
-            gapiLoaded();
-        };
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
-        }
+         
+         // Interação com o botão de midia físico do PC/Celular (MediaSession API)
+         if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', togglePlay);
+            navigator.mediaSession.setActionHandler('pause', togglePlay);
+            navigator.mediaSession.setActionHandler('previoustrack', prevSong);
+            navigator.mediaSession.setActionHandler('nexttrack', nextSong);
+         }
     </script>
 </body>
 </html>
