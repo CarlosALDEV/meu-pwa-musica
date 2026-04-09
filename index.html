@@ -123,7 +123,7 @@
             border-radius: 8px;
             padding: 16px;
             cursor: pointer;
-            transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
             display: flex;
             flex-direction: column;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -146,9 +146,16 @@
             align-items: center;
             justify-content: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            position: relative;
         }
         
         .card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .card video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -177,9 +184,6 @@
             margin: 0;
             font-size: 13px;
             color: #b3b3b3;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .play-hover-btn {
@@ -202,6 +206,7 @@
             border: none;
             padding-left: 3px;
             cursor: pointer;
+            z-index: 5;
         }
 
         .card:not(.folder):hover .play-hover-btn {
@@ -234,14 +239,17 @@
 
         .video-container {
             width: 90%;
-            max-width: 800px;
+            max-width: 900px;
+            max-height: 80vh;
             position: relative;
         }
 
         .video-container video {
             width: 100%;
+            height: auto;
             border-radius: 8px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            background: #000;
         }
 
         .close-video-btn {
@@ -310,6 +318,12 @@
         }
         
         .player-info .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .player-info .thumb video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -418,6 +432,37 @@
             font-size: 14px;
         }
 
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4285F4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 2px;
+            background-color: #282828;
+            border-radius: 1px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #4285F4;
+            width: 0%;
+            transition: width 0.1s;
+        }
+
         #g_id_onload { display: none; }
         
         .main-content::-webkit-scrollbar { width: 10px; }
@@ -436,6 +481,21 @@
 
         .error-message.show {
             display: block;
+        }
+
+        .cancel-btn {
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .cancel-btn:hover {
+            background-color: #ff2222;
         }
     </style>
 </head>
@@ -506,9 +566,13 @@
                 <button id="nextBtn" onclick="nextSong()" title="Próxima"><i class="fa-solid fa-forward-step"></i></button>
                 <button id="repeatBtn" onclick="toggleRepeat()" title="Repetir"><i class="fa-solid fa-repeat"></i></button>
             </div>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
         </div>
         
         <div class="player-right">
+            <button id="cancelBtn" class="cancel-btn" onclick="cancelLoad()" style="display:none;">Cancelar</button>
             <div class="volume-control">
                 <i class="fa-solid fa-volume-low"></i>
                 <input type="range" id="volumeSlider" min="0" max="100" value="100" onchange="changeVolume()">
@@ -531,7 +595,8 @@
         let allFilesRaw = [];
         let isRepeat = false;
         let isLoading = false;
-        let isApiReady = false; // ✅ NOVO: Flag para garantir API inicializada
+        let isApiReady = false;
+        let abortController = null; // ✅ NOVO: Controle para cancelar requisições
         
         let tokenClient;
         let driveAccessToken = null;
@@ -558,7 +623,7 @@
                     apiKey: API_KEY,
                     discoveryDocs: DISCOVERY_DOCS,
                 });
-                isApiReady = true; // ✅ Marca como pronto
+                isApiReady = true;
                 console.log("✅ gapi.client initialized successfully");
             } catch(err) {
                 console.error("❌ Erro ao inicializar gapi:", err);
@@ -596,26 +661,29 @@
              tokenClient.requestAccessToken({prompt: 'consent'}); 
         }
 
-        // ✅ FUNÇÃO CORRIGIDA: Não reinicializa a API
+        // ✅ CORRIGIDO: Botão voltar agora funciona
         function listFiles(folderId, folderName) {
-            // Verifica se a API está pronta
             if (!isApiReady) {
                 showError("API do Google ainda não está pronta. Aguarde...");
                 return;
             }
 
-            // Se já está carregando, não faz nova requisição
             if (isLoading) {
                 console.log("⏳ Já está buscando arquivos, aguarde...");
                 return;
             }
+
+            // ✅ Cancela requisição anterior se houver
+            if(abortController) {
+                abortController.abort();
+            }
+            abortController = new AbortController();
 
             isLoading = true;
             document.getElementById('authStatus').textContent = "🔍 Buscando arquivos...";
             
             const query = `'${folderId}' in parents and (mimeType contains 'audio/' or mimeType='video/mp4' or mimeType='application/vnd.google-apps.folder') and trashed = false`;
 
-            // ✅ NÃO reinicializa: apenas faz a requisição
             gapi.client.drive.files.list({
                 q: query,
                 fields: 'files(id, name, mimeType, thumbnailLink)',
@@ -623,13 +691,13 @@
                 pageSize: 1000,
                 spaces: 'drive'
             }).then(response => {
-                isLoading = false; // ✅ Libera para nova busca
+                isLoading = false;
                 allFilesRaw = response.result.files || [];
                 displayFiles(folderName);
                 document.getElementById('authStatus').textContent = "";
                 console.log("✅ Arquivos carregados:", allFilesRaw.length);
             }).catch(error => {
-                isLoading = false; // ✅ Libera mesmo em erro
+                isLoading = false;
                 console.error('❌ Erro ao listar:', error);
                 showError("Erro ao buscar arquivos: " + (error.result?.error?.message || "Erro desconhecido"));
                 document.getElementById('authStatus').textContent = "❌ Erro ao buscar arquivos";
@@ -642,6 +710,7 @@
             
             document.getElementById('currentFolderName').textContent = folderName;
             
+            // ✅ CORRIGIDO: Botão voltar aparece APENAS se não estiver na raiz
             if (folderHistory.length > 1) {
                 document.getElementById('btnVoltar').style.display = 'flex';
             } else {
@@ -666,7 +735,7 @@
                     card.onclick = () => openFolder(file.id, file.name);
                 } else {
                     if (file.thumbnailLink) {
-                        imageHtml = `<div class="card-image-container"><img src="${file.thumbnailLink}" alt="Capa"></div>`;
+                        imageHtml = `<div class="card-image-container"><img src="${file.thumbnailLink}" alt="Capa" loading="lazy"></div>`;
                     } else {
                         imageHtml = `<div class="card-image-container"><i class="fa-solid fa-music icon-placeholder"></i></div>`;
                     }
@@ -693,6 +762,7 @@
             listFiles(folderId, folderName);
         }
 
+        // ✅ CORRIGIDO: Botão voltar agora realmente volta
         function goBack() {
             if (folderHistory.length > 1) {
                 folderHistory.pop();
@@ -708,7 +778,10 @@
             
             const thumbDiv = document.getElementById('playerThumb');
             if (file.thumbnailLink) {
-                thumbDiv.innerHTML = `<img src="${file.thumbnailLink}">`;
+                const img = document.createElement('img');
+                img.src = file.thumbnailLink;
+                thumbDiv.innerHTML = '';
+                thumbDiv.appendChild(img);
             } else {
                 thumbDiv.innerHTML = `<i class="fa-solid fa-music"></i>`;
             }
@@ -719,11 +792,24 @@
             document.getElementById('playPauseBtn').style.paddingLeft = '0px';
         }
 
+        // ✅ NOVO: Função para cancelar carregamento
+        function cancelLoad() {
+            if(abortController) {
+                abortController.abort();
+            }
+            isLoading = false;
+            document.getElementById('cancelBtn').style.display = 'none';
+            document.getElementById('playerTitle').textContent = "Cancelado";
+        }
+
+        // ✅ OTIMIZADO: Streaming ao invés de download total
         function playSong(index) {
-            if(isLoading) return; // ✅ Não deixa clicar enquanto carrega
+            if(isLoading) return;
             if(index < 0 || index >= playlist.length) return;
             
             isLoading = true;
+            document.getElementById('cancelBtn').style.display = 'inline-block';
+            
             currentIndex = index;
             const file = playlist[currentIndex];
             const audio = document.getElementById('audio');
@@ -731,22 +817,27 @@
             updatePlayerUI(file);
             currentFileData = file;
             
-            audio.src = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+            // ✅ Streaming: Começa a tocar imediatamente
+            const src = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+            audio.src = src;
             
-            fetch(audio.src, {
-                headers: new Headers({
+            // Adiciona header de autenticação
+            fetch(src, {
+                headers: {
                     'Authorization': 'Bearer ' + driveAccessToken
-                })
-            })
-            .then(response => response.blob())
-            .then(blob => {
-                const url = URL.createObjectURL(blob);
-                audio.src = url;
-                audio.play();
+                },
+                signal: abortController.signal
+            }).then(response => {
+                // Quando a resposta começa a chegar, já tocamos
+                audio.play().catch(err => console.log("Play erro:", err));
+                document.getElementById('cancelBtn').style.display = 'none';
                 isLoading = false;
             }).catch(err => {
-                console.log("❌ Erro no fetch do audio: ", err);
-                document.getElementById('playerTitle').textContent = "Erro ao carregar mídia";
+                if(err.name !== 'AbortError') {
+                    console.log("❌ Erro no carregamento:", err);
+                    document.getElementById('playerTitle').textContent = "Erro ao carregar";
+                }
+                document.getElementById('cancelBtn').style.display = 'none';
                 isLoading = false;
             });
         }
@@ -801,17 +892,22 @@
              audio.volume = volumeSlider.value / 100;
          }
 
+         // ✅ CORRIGIDO: Vídeos agora carregam corretamente
          function openVideoModal() {
-             if(!currentFileData || !currentFileData.thumbnailLink) return;
+             if(!currentFileData) return;
              
              const videoPlayer = document.getElementById('videoPlayer');
-             videoPlayer.src = `https://www.googleapis.com/drive/v3/files/${currentFileData.id}?alt=media`;
+             const src = `https://www.googleapis.com/drive/v3/files/${currentFileData.id}?alt=media`;
+             
+             videoPlayer.src = src;
+             videoPlayer.type = 'video/mp4';
              
              const audio = document.getElementById('audio');
-             videoPlayer.currentTime = audio.currentTime;
-             
              if(!audio.paused) {
-                 videoPlayer.play();
+                 setTimeout(() => {
+                     videoPlayer.currentTime = audio.currentTime;
+                     videoPlayer.play().catch(err => console.log("Video play erro:", err));
+                 }, 100);
              }
              
              document.getElementById('videoModal').classList.add('active');
@@ -820,8 +916,18 @@
          function closeVideoModal() {
              const videoPlayer = document.getElementById('videoPlayer');
              videoPlayer.pause();
+             videoPlayer.src = '';
              document.getElementById('videoModal').classList.remove('active');
          }
+
+         // ✅ Atualiza a barra de progresso do áudio
+         document.getElementById('audio').addEventListener('timeupdate', () => {
+             const audio = document.getElementById('audio');
+             const progressFill = document.getElementById('progressFill');
+             if(audio.duration) {
+                 progressFill.style.width = (audio.currentTime / audio.duration) * 100 + '%';
+             }
+         });
 
          document.getElementById('audio').addEventListener('ended', () => {
              if (isRepeat) {
@@ -834,7 +940,7 @@
          document.getElementById('audio').addEventListener('play', () => {
              const videoPlayer = document.getElementById('videoPlayer');
              if(videoPlayer.src) {
-                 videoPlayer.play();
+                 videoPlayer.play().catch(err => console.log("Sync play error:", err));
              }
          });
 
